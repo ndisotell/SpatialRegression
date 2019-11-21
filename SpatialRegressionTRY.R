@@ -145,6 +145,10 @@ colnames(dist.lag.output) <- c("fips","fitted","resid","childpov",
                                "single_mom","unmarried","less_hs","income_ratio")
 
 #Create quantiles
+quantiles_pov <- dist.lag.output %>%
+  pull(childpov) %>%
+  quantile(probs = seq(0, 1, length.out = 4), na.rm = TRUE)
+
 quantiles_sm <- dist.lag.output %>%
   pull(single_mom) %>%
   quantile(probs = seq(0, 1, length.out = 4), na.rm = TRUE)
@@ -154,6 +158,12 @@ quantiles_lh <- dist.lag.output %>%
   quantile(probs = seq(0, 1, length.out = 4), na.rm = TRUE)
 
 #Create ranks
+pov_rank <- cut(dist.lag.output$childpov, 
+                breaks= quantiles_pov, 
+                labels=c("1", "2", "3"), 
+                na.rm = TRUE,
+                include.lowest = TRUE)
+
 sm_rank <- cut(dist.lag.output$single_mom, 
                breaks= quantiles_sm, 
                labels=c("1", "2", "3"), 
@@ -169,16 +179,20 @@ lh_rank <- cut(dist.lag.output$less_hs,
 #Join ranks and combined column to dataset
 dist.lag.output$sm_score <- as.numeric(sm_rank)
 dist.lag.output$lh_score <- as.numeric(lh_rank)
-dist.lag.output$sm_lh <- paste(as.numeric(dist.lag.output$lh_score), 
-                               "-", 
-                               as.numeric(dist.lag.output$sm_score))
+dist.lag.output$pov_score <- as.numeric(pov_rank)
+dist.lag.output$sm_pov <- paste(as.numeric(dist.lag.output$pov_score), 
+                                 "-", 
+                                 as.numeric(dist.lag.output$sm_score))
+dist.lag.output$lh_pov <- paste(as.numeric(dist.lag.output$pov_score), 
+                                 "-", 
+                                 as.numeric(dist.lag.output$lh_score))
 #creating the legend for 
 legend_colors <- tibble(
   x = c(3,2,1,3,2,1,3,2,1),
   y = c(3,3,3,2,2,2,1,1,1),
   z = c("#574249", "#627f8c", "#64acbe", "#985356", "#ad9ea5", "#b0d5df", "#c85a5a", "#e4acac", "#e8e8e8"))
 
-xlabel <- "Less than HS edu,Low \u2192 High"
+xlabel <- "Poverty,Low \u2192 High"
 xlabel <- gsub(",", "\n", xlabel)
 ylabel <- "Single Mother Household,Low \u2192 High"
 ylabel <- gsub(",", "\n", ylabel)
@@ -192,6 +206,32 @@ legend <- ggplot(legend_colors, aes(x,y)) +
         axis.text.y=element_blank(),
         axis.ticks.y=element_blank()) +
   labs(x = xlabel, y = ylabel) + 
+  scale_fill_identity() +
+  ggtitle("Legend") +
+  theme(axis.title.y = element_text(face = "italic", hjust = 0.5, size = 8)) +
+  theme(axis.title.x = element_text(face = "italic", hjust = 0.5, size = 8)) +
+  theme(plot.title = element_text(face="bold", hjust = 0.5, size = 10))
+
+#Creating the second legend for the second map
+legend_colors2 <- tibble(
+  x = c(3,2,1,3,2,1,3,2,1),
+  y = c(3,3,3,2,2,2,1,1,1),
+  z = c("#574249", "#627f8c", "#64acbe", "#985356", "#ad9ea5", "#b0d5df", "#c85a5a", "#e4acac", "#e8e8e8"))
+
+xlabel2 <- "Poverty,Low \u2192 High"
+xlabel2 <- gsub(",", "\n", xlabel)
+ylabel2 <- "Less than HS,Low \u2192 High"
+ylabel2 <- gsub(",", "\n", ylabel)
+
+legend2 <- ggplot(legend_colors2, aes(x,y)) + 
+  geom_tile(aes(fill=z)) + 
+  theme_minimal() + theme(legend.position = "none") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  labs(x = xlabel2, y = ylabel2) + 
   scale_fill_identity() +
   ggtitle("Legend") +
   theme(axis.title.y = element_text(face = "italic", hjust = 0.5, size = 8)) +
@@ -242,9 +282,9 @@ bivariate_color_scale <- tibble(
   gather("group", "fill")
 
 ga_poly <- ga_poly %>% 
-  left_join(bivariate_color_scale, by = c("sm_lh" = "group"))
+  left_join(bivariate_color_scale, by = c("sm_pov" = "group"))
 
-sm_lh_map <- ggplot() + 
+sm_pov_map <- ggplot() + 
   geom_polygon(data = world, aes(x=long,y=lat, group=group), fill = "gray95", color = "white") +
   geom_polygon(data = states, aes(x=long,y=lat, group=group), fill = "gray", color = "white") +
   geom_polygon(data = ga_poly, aes(x=long, y=lat, group=group, fill = fill)) + 
@@ -255,13 +295,50 @@ sm_lh_map <- ggplot() +
   theme_grey() + theme(legend.position="bottom") + theme(legend.title.align=0.5) +
   theme(panel.background = element_rect(fill = 'deepskyblue'),
         panel.grid.major = element_line(colour = NA)) +
-  labs(x = "Longitude", y = "Latitude", fill = "Less than HS degree", 
-       title = "Bivariate Map of no HS degree and Single Mother Households") +
+  labs(x = "Longitude", y = "Latitude", fill = "Child Poverty", 
+       title = "Bivariate Map of Child Poverty and Single Mother Households") +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
-#mom_pov_map use to preview the map
+#Second map ggplot
+bivariate_color_scale2 <- tibble(
+  "3 - 3" = "#574249", 
+  "2 - 3" = "#627f8c",
+  "1 - 3" = "#64acbe",
+  "3 - 2" = "#985356",
+  "2 - 2" = "#ad9ea5",
+  "1 - 2" = "#b0d5df",
+  "3 - 1" = "#c85a5a",
+  "2 - 1" = "#e4acac",
+  "1 - 1" = "#e8e8e8") %>%
+  gather("group", "fill")
+
+ga_poly2 <- ga_poly %>% 
+  left_join(bivariate_color_scale2, by = c("sm_pov" = "group"))
+
+lh_pov_map <- ggplot() + 
+  geom_polygon(data = world, aes(x=long,y=lat, group=group), fill = "gray95", color = "white") +
+  geom_polygon(data = states, aes(x=long,y=lat, group=group), fill = "gray", color = "white") +
+  geom_polygon(data = ga_poly2, aes(x=long, y=lat, group=group, fill = fill)) + 
+  geom_polygon(data = southern_states, aes(x=long,y=lat, group=group), fill = NA, color = "white") +
+  geom_polygon(data = ga_counties, aes(x=long,y=lat, group=group), fill = NA, color = "black", size = 0.05) +
+  coord_map("conic", lat0 = 30, xlim=c(-90,-75), ylim=c(30,36)) +
+  scale_fill_identity() +
+  theme_grey() + theme(legend.position="bottom") + theme(legend.title.align=0.5) +
+  theme(panel.background = element_rect(fill = 'deepskyblue'),
+        panel.grid.major = element_line(colour = NA)) +
+  labs(x = "Longitude", y = "Latitude", fill = "Child Poverty", 
+       title = "Bivariate Map of Child poverty and Less than HS degree") +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+#sm_pov_map use to preview the map
 final_map <- ggdraw() +
-  draw_plot(sm_lh_map, x = 0, y = 0, width = 1, height = 1) +
+  draw_plot(sm_pov_map, x = 0, y = 0, width = 1, height = 1) +
   draw_plot(legend, x = 1.0, y = 0.25, width = 0.2, height = 0.25) 
 
 final_map
+#lh_pov_map use to preview map
+
+final_map2 <- ggdraw() +
+  draw_plot(lh_pov_map, x = 0, y = 0, width = 1, height = 1) +
+  draw_plot(legend2, x = 1.0, y = 0.25, width = 0.2, height = 0.25) 
+
+final_map2
